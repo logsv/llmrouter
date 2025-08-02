@@ -1,0 +1,22 @@
+{
+  "name": "llm-router",
+  "version": "1.0.0",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@types/mock-fs": "^4.13.4",
+    "bottleneck": "^2.19.5",
+    "mock-fs": "^5.5.0",
+    "zod": "^4.0.14"
+  }
+}
