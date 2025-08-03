@@ -1,4 +1,6 @@
 
+import type { LLMRequest, LLMResponse } from '../core/router';
+
 export interface ModelConfig {
   name: string;
   costPer1kInputTokens: number;
@@ -24,9 +26,11 @@ export interface RetryConfig {
   factor: number;
 }
 
+import { LLMRequest, LLMResponse } from "../core/router";
+
 export interface LLMProviderConfig {
   name: string;
-  type: 'openai' | 'anthropic' | 'google' | 'ollama';
+  type: 'openai' | 'anthropic' | 'google' | 'ollama' | 'custom';
   enabled?: boolean;
   priority?: number;
   apiKey?: string;
@@ -39,6 +43,7 @@ export interface LLMProviderConfig {
     minTimeMs?: number;
     tokensPerSecond?: number;
   };
+  handler?: (req: LLMRequest) => Promise<LLMResponse>;
 }
 
 export interface RouterConfig {

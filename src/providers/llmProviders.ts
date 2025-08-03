@@ -3,6 +3,7 @@ import { LLMRequest, LLMResponse } from '../core/router.js';
 export interface LLMProvider {
   name: string;
   type: string;
+  execute(request: LLMRequest): Promise<LLMResponse>;
   createCompletion(request: LLMRequest): Promise<LLMResponse>;
   estimateTokens(prompt: string): Promise<number>;
 }
@@ -14,6 +15,14 @@ class MockProvider implements LLMProvider {
   constructor(name: string, type: string) {
     this.name = name;
     this.type = type;
+  }
+
+  async execute(request: LLMRequest): Promise<LLMResponse> {
+    return {
+      text: `mock response for ${this.name}`,
+      model: request.model || '',
+      provider: this.name,
+    };
   }
 
   async createCompletion(request: LLMRequest): Promise<LLMResponse> {

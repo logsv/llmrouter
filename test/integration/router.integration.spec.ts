@@ -33,7 +33,7 @@ describe('LLMRouter Integration Tests', () => {
         },
       ],
     };
-    const router = await LLMRouter.create(undefined, async () => mockConfig);
+    const router = await LLMRouter.create({}, () => mockConfig);
     const request: LLMRequest = { prompt: 'test' };
     const response = await router.execute(request);
     expect(response.provider).toBe('cheap-provider');

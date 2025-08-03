@@ -30,7 +30,9 @@ export interface LLMResponse {
   metadata?: Record<string, unknown>;
 }
 
+export type ProviderHandlers = Record<string, (req: LLMRequest) => Promise<LLMResponse>>;
 
+export type HandlerFn = (req: LLMRequest) => Promise<LLMResponse>;
 
 export class LLMRouter {
   private providers: Map<string, { provider: LLMProvider; config: LoadedProviderConfig; limiter: Bottleneck; lastUsed: number; failureCount: number; successCount: number; }>;
@@ -38,24 +40,26 @@ export class LLMRouter {
   private strategy: 'round_robin' | 'cost_priority_round_robin';
   private config: RouterConfig;
   private defaultModel: string;
+  private handlersMap?: ProviderHandlers;
 
   /**
    * Create a new LLM router instance
    * @param config Optional configuration to use. If not provided, will load from default location
    */
-  static async create(configPath?: string, loadConfigFn = loadConfig): Promise<LLMRouter> {
-    const config = await loadConfigFn(configPath);
-    const router = new LLMRouter(config);
+  static async create(handlers?: ProviderHandlers, configPath?: string | (() => RouterConfig), loadConfigFn = loadConfig): Promise<LLMRouter> {
+    const config = typeof configPath === 'function' ? configPath() : await loadConfigFn(configPath);
+    const router = new LLMRouter(config, handlers);
     await router.initializeProviders(config);
     return router;
   }
 
-  private constructor(config: RouterConfig) {
+  private constructor(config: RouterConfig, handlers?: ProviderHandlers) {
     this.providers = new Map();
     this.circuitBreakers = new Map();
     this.strategy = config.loadBalancingStrategy || 'round_robin';
     this.defaultModel = config.defaultModel || '';
     this.config = config;
+    this.handlersMap = handlers;
   }
 
   private async initializeProviders(config: RouterConfig) {
@@ -239,12 +243,24 @@ export class LLMRouter {
     if (!providerName) {
       throw new Error('No available LLM providers');
     }
-    
-    return {
-      text: '',
-      model: model,
-      provider: providerName,
-    };
+
+    const providerWrapper = this.providers.get(providerName);
+    if (!providerWrapper) {
+        throw new Error(`Provider ${providerName} not found`);
+    }
+
+    if (providerWrapper.config.handler) {
+      return await providerWrapper.config.handler(request);
+    }
+
+    // otherwise fall back to built-in logic
+    switch (providerWrapper.config.type) {
+      case 'openai':
+      case 'ollama':
+        return await providerWrapper.provider.execute(request);
+      default:
+        throw new Error(`No integration for ${providerWrapper.config.type}`);
+    }
   }
 
   
