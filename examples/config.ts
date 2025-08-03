@@ -15,5 +15,20 @@ export function makeRouterConfig(): RouterConfig {
       }],
       handler,
     })),
+    resilience: {
+      retry: {
+        enabled: true,
+        attempts: 3,
+        initialBackoffMs: 100,
+        maxBackoffMs: 1000,
+        multiplier: 2,
+      },
+      circuitBreaker: {
+        enabled: true,
+        threshold: 5,
+        samplingDurationMs: 60000,
+        resetTimeoutMs: 30000,
+      },
+    },
   };
 }

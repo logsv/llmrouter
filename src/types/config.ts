@@ -13,20 +13,25 @@ export interface ModelConfig {
   };
 }
 
-export interface CircuitBreakerConfig {
-  failureThreshold: number;
-  successThreshold: number;
-  timeout: number;
-}
-
 export interface RetryConfig {
-  maxAttempts: number;
-  initialDelay: number;
-  maxDelay: number;
-  factor: number;
+  enabled: boolean;
+  attempts: number;
+  initialBackoffMs: number;
+  maxBackoffMs: number;
+  multiplier: number;
 }
 
-import { LLMRequest, LLMResponse } from "../core/router";
+export interface CircuitBreakerConfig {
+  enabled: boolean;
+  threshold: number;
+  samplingDurationMs: number;
+  resetTimeoutMs: number;
+}
+
+export interface ResilienceConfig {
+  retry?: RetryConfig;
+  circuitBreaker?: CircuitBreakerConfig;
+}
 
 export interface LLMProviderConfig {
   name: string;
@@ -36,8 +41,6 @@ export interface LLMProviderConfig {
   apiKey?: string;
   baseUrl?: string;
   models: ModelConfig[];
-  circuitBreaker?: Partial<CircuitBreakerConfig>;
-  retry?: Partial<RetryConfig>;
   rateLimit?: {
     maxConcurrent?: number;
     minTimeMs?: number;
@@ -50,6 +53,7 @@ export interface RouterConfig {
   loadBalancingStrategy?: 'round_robin' | 'cost_priority_round_robin';
   defaultModel?: string;
   providers: LLMProviderConfig[];
+  resilience?: ResilienceConfig;
 }
 
 export interface LoadedProviderConfig extends LLMProviderConfig {
@@ -57,19 +61,19 @@ export interface LoadedProviderConfig extends LLMProviderConfig {
   priority: number;
   apiKey: string;
   baseUrl: string;
-  circuitBreaker: CircuitBreakerConfig;
-  retry: RetryConfig;
 }
 
-export const DEFAULT_CIRCUIT_BREAKER: CircuitBreakerConfig = {
-  failureThreshold: 5,
-  successThreshold: 3,
-  timeout: 60000,
+export const DEFAULT_RETRY: RetryConfig = {
+  enabled: true,
+  attempts: 3,
+  initialBackoffMs: 100,
+  maxBackoffMs: 1000,
+  multiplier: 2,
 };
 
-export const DEFAULT_RETRY: RetryConfig = {
-  maxAttempts: 3,
-  initialDelay: 1000,
-  maxDelay: 30000,
-  factor: 2,
+export const DEFAULT_CIRCUIT_BREAKER: CircuitBreakerConfig = {
+  enabled: true,
+  threshold: 5,
+  samplingDurationMs: 60000,
+  resetTimeoutMs: 30000,
 };

@@ -193,15 +193,7 @@ export class LLMRouter {
     const now = Date.now();
     const oneMinute = 60000;
     
-    // Filter out unhealthy providers (too many recent failures)
-    const healthyProviders = availableProviders.filter(([_, wrapper]) => {
-      // If we have failures, check the cooldown period
-      if (wrapper.failureCount > 0) {
-        const timeSinceLastFailure = now - (wrapper.lastUsed || 0);
-        return timeSinceLastFailure > oneMinute * Math.min(wrapper.failureCount, 5);
-      }
-      return true;
-    });
+    const healthyProviders = availableProviders;
     
     // Use healthy providers if available, otherwise fall back to all available
     const candidates = healthyProviders.length > 0 ? healthyProviders : availableProviders;

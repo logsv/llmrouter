@@ -16,6 +16,7 @@
   "dependencies": {
     "@types/mock-fs": "^4.13.4",
     "bottleneck": "^2.19.5",
+    "cockatiel": "^3.2.1",
     "mock-fs": "^5.5.0",
     "zod": "^4.0.14"
   }
