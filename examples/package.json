@@ -1,0 +1,15 @@
+{
+  "name": "llm-router-examples",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Examples for LLM Router",
+  "scripts": {
+    "basic": "ts-node basic-usage.ts",
+    "resilient": "ts-node resilient-router.ts",
+    "multi": "ts-node multi-provider.ts"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  }
+}

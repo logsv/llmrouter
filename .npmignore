@@ -1,0 +1,40 @@
+# Source files
+src/
+test/
+examples/
+
+# Development files
+*.spec.ts
+*.test.ts
+jest.config.js
+tsconfig.json
+.gitignore
+
+# Documentation that's not needed in package
+CLAUDE.md
+gemini.md
+
+# Configuration files
+config/
+
+# Node modules and build artifacts
+node_modules/
+.npm/
+.nyc_output/
+coverage/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,8 +1,9 @@
 # LLM Router
 
-[![CI](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/actions/workflows/ci.yml)
+[![npm version](https://badge.fury.io/js/llm-router.svg)](https://badge.fury.io/js/llm-router)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A production-ready LLM router with intelligent load balancing, rate limiting, circuit breaker patterns, and comprehensive metrics tracking. This library provides a wrapper/proxy layer for LLM providers without implementing any LLM integrations directly - it's designed to route requests to your own LLM API integrations.
+A production-ready LLM router with intelligent load balancing, resilience patterns, and multi-provider support. Route requests across multiple LLM providers (OpenAI, Anthropic, Ollama, etc.) with automatic failover, circuit breakers, retry logic, and comprehensive metrics tracking.
 
 ## ✨ Features
 
