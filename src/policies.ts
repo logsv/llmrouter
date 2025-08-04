@@ -1,10 +1,8 @@
-import { Policy, retry, handleAll, ExponentialBackoff, circuitBreaker, ConsecutiveBreaker, wrap } from 'cockatiel';
+import { retry, handleAll, ExponentialBackoff, circuitBreaker, ConsecutiveBreaker, wrap } from 'cockatiel';
 import type { ResilienceConfig } from './types/config';
 
-const noOp = Policy.noop;
-
 export function makeResiliencePolicy(cfg?: ResilienceConfig) {
-  const policies: Policy[] = [];
+  const policies: any[] = [];
 
   if (cfg?.retry?.enabled) {
     policies.push(retry(handleAll, {
@@ -24,7 +22,10 @@ export function makeResiliencePolicy(cfg?: ResilienceConfig) {
   }
 
   if (policies.length === 0) {
-    return Policy.noop;
+    // Return a no-op policy that just executes the function
+    return {
+      execute: async <T>(fn: () => Promise<T>): Promise<T> => fn()
+    } as any;
   }
 
   return wrap(...policies);

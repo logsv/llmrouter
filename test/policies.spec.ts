@@ -4,7 +4,14 @@ import { Policy, CircuitBrokenError } from 'cockatiel';
 describe('Resilience Policies', () => {
   it('should return a no-op policy when no config is provided', async () => {
     const policy = makeResiliencePolicy();
-    expect(policy).toBe(Policy.noop);
+    expect(policy).toHaveProperty('execute');
+    expect(typeof policy.execute).toBe('function');
+    
+    // Test that it actually executes the function without modification
+    const mockFn = jest.fn().mockResolvedValue('test-result');
+    const result = await policy.execute(mockFn);
+    expect(result).toBe('test-result');
+    expect(mockFn).toHaveBeenCalledTimes(1);
   });
 
   it('should retry the specified number of times', async () => {

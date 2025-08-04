@@ -1,9 +1,71 @@
-
 # LLM Router
 
 [![CI](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/actions/workflows/ci.yml)
 
-A simple, lightweight, and dependency-free LLM router that allows you to define a set of LLM providers and route requests to them based on a defined strategy.
+A production-ready LLM router with intelligent load balancing, rate limiting, circuit breaker patterns, and comprehensive metrics tracking. This library provides a wrapper/proxy layer for LLM providers without implementing any LLM integrations directly - it's designed to route requests to your own LLM API integrations.
+
+## ✨ Features
+
+- **🔄 Smart Load Balancing**: Cost-priority and round-robin strategies
+- **⚡ Rate Limiting**: Token bucket algorithm with per-provider limits
+- **🛡️ Circuit Breaker**: Per-provider circuit breaker with automatic recovery
+- **🔁 Retry Logic**: Exponential backoff with configurable attempts
+- **📊 Metrics Tracking**: Comprehensive request/response metrics
+- **⚙️ Configurable**: Enable/disable features per provider
+- **🎯 No LLM Lock-in**: Bring your own LLM API integrations
+- **💪 TypeScript**: Full type safety and IntelliSense support
+
+## Architecture
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   LLM Request   │────▶│   LLM Router     │────▶│  Your Handler   │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                              │                          │
+                              ▼                          │
+                    ┌──────────────────┐                 │
+                    │ Load Balancer    │                 │
+                    │ • Cost Priority  │                 │
+                    │ • Round Robin    │                 │
+                    └──────────────────┘                 │
+                              │                          │
+                              ▼                          │
+                    ┌──────────────────┐                 │
+                    │ Rate Limiter     │                 │
+                    │ • Token Bucket   │                 │
+                    │ • Per Provider   │                 │
+                    └──────────────────┘                 │
+                              │                          │
+                              ▼                          │
+                    ┌──────────────────┐                 │
+                    │ Circuit Breaker  │                 │
+                    │ • Per Provider   │                 │
+                    │ • Auto Recovery  │                 │
+                    └──────────────────┘                 │
+                              │                          │
+                              ▼                          │
+                    ┌──────────────────┐                 │
+                    │ Retry Logic      │                 │
+                    │ • Exponential    │                 │
+                    │ • Backoff        │                 │
+                    └──────────────────┘                 │
+                              │                          │
+                              ▼                          ▼
+                    ┌──────────────────┐    ┌─────────────────┐
+                    │ Metrics Tracking │    │   OpenAI API    │
+                    │ • Success/Fail   │    │   Anthropic     │
+                    │ • Rate Limits    │    │   Custom APIs   │
+                    │ • Response Time  │    │   Ollama        │
+                    └──────────────────┘    └─────────────────┘
+```
+
+### Request Flow
+
+1. **Load Balancer**: Selects providers based on cost-priority or round-robin
+2. **Rate Limit Check**: Verifies provider has available token capacity  
+3. **Circuit Breaker Check**: Skips providers with open circuit breakers
+4. **Execute**: Runs request through rate limiter with retry logic
+5. **Update Metrics**: Tracks success/failure and updates circuit breaker state
 
 ## Installation
 
@@ -11,94 +73,338 @@ A simple, lightweight, and dependency-free LLM router that allows you to define 
 npm install llm-router
 ```
 
-## Usage
-
-For a complete, runnable example, see the files in the `/examples` directory.
-
-**1. Define Your Handlers**
-
-Create a file to define your provider handlers. These are the functions that will contain the logic for interacting with each of your LLM providers.
+## Quick Start
 
 ```typescript
-// examples/handlers.ts
+import { ResilientRouter, type LLMRequest, type LLMResponse } from 'llm-router';
 
-import { LLMRequest, LLMResponse } from '../src/core/router';
-import OpenAI from 'openai';
-import axios from 'axios';
-
-export const providerHandlers: Record<string, (req: LLMRequest) => Promise<LLMResponse>> = {
-  'provider-1': async ({ prompt, model, ...options }) => {
-    const client = new OpenAI();
-    const resp = await client.chat.completions.create({
-      model: model || 'gpt-3.5-turbo',
-      messages: [{ role: 'user', content: prompt }],
-      ...options,
+// 1. Define your LLM provider handlers
+const handlers = {
+  'openai-provider': async (req: LLMRequest): Promise<LLMResponse> => {
+    // Your OpenAI integration logic
+    const response = await openaiClient.chat.completions.create({
+      model: req.model,
+      messages: [{ role: 'user', content: req.prompt }]
     });
-    return { text: resp.choices[0].message.content || '', provider: 'provider-1', model: model || 'gpt-3.5-turbo' };
+    return { 
+      text: response.choices[0].message.content,
+      provider: 'openai-provider',
+      model: req.model 
+    };
   },
-
-  'provider-2': async ({ prompt, model }) => {
-    const { data } = await axios.post('http://localhost:11434/api/generate', {
-      model,
-      prompt,
+  'anthropic-provider': async (req: LLMRequest): Promise<LLMResponse> => {
+    // Your Anthropic integration logic
+    const response = await anthropicClient.messages.create({
+      model: req.model,
+      messages: [{ role: 'user', content: req.prompt }]
     });
-    return { text: data.response, provider: 'provider-2', model: model || 'llama2' };
-  },
+    return { 
+      text: response.content[0].text,
+      provider: 'anthropic-provider',
+      model: req.model 
+    };
+  }
 };
+
+// 2. Configure the router
+const config = {
+  loadBalancingStrategy: 'cost_priority_round_robin',
+  providers: [
+    {
+      name: 'openai-provider',
+      type: 'custom',
+      handler: handlers['openai-provider'],
+      models: [{
+        name: 'gpt-4',
+        costPer1kInputTokens: 0.03,
+        costPer1kOutputTokens: 0.06,
+        maxTokens: 8192
+      }],
+      rateLimit: {
+        tokensPerSecond: 10,
+        maxConcurrent: 5
+      },
+      priority: 2
+    },
+    {
+      name: 'anthropic-provider', 
+      type: 'custom',
+      handler: handlers['anthropic-provider'],
+      models: [{
+        name: 'claude-3-sonnet',
+        costPer1kInputTokens: 0.015,
+        costPer1kOutputTokens: 0.075,
+        maxTokens: 4096
+      }],
+      rateLimit: {
+        tokensPerSecond: 20,
+        maxConcurrent: 10
+      },
+      priority: 1
+    }
+  ],
+  resilience: {
+    retry: {
+      enabled: true,
+      attempts: 3,
+      initialBackoffMs: 100,
+      maxBackoffMs: 1000,
+      multiplier: 2
+    },
+    circuitBreaker: {
+      enabled: true,
+      threshold: 5,
+      samplingDurationMs: 60000,
+      resetTimeoutMs: 30000
+    }
+  }
+};
+
+// 3. Create and use the router
+const router = await ResilientRouter.create(handlers, () => config);
+
+const response = await router.execute({
+  prompt: 'Explain quantum computing',
+  model: 'claude-3-sonnet'
+});
+
+console.log(`Provider: ${response.provider}`);
+console.log(`Response: ${response.text}`);
 ```
 
-**2. Configure the Router**
+## Configuration Options
 
-Create a configuration file that dynamically builds the router's provider list from your handlers.
+### Router Configuration
 
 ```typescript
-// examples/config.ts
+interface RouterConfig {
+  loadBalancingStrategy?: 'round_robin' | 'cost_priority_round_robin';
+  defaultModel?: string;
+  providers: LLMProviderConfig[];
+  resilience?: ResilienceConfig;
+}
+```
 
-import { RouterConfig } from '../src';
-import { providerHandlers } from './handlers';
+### Provider Configuration
 
-export function makeRouterConfig(): RouterConfig {
-  return {
-    loadBalancingStrategy: 'round_robin',
-    providers: Object.entries(providerHandlers).map(([name, handler]) => ({
-      name,
-      type: 'custom',
-      models: [{
-        name: name === 'provider-1' ? 'gpt-3.5-turbo' : 'llama2',
-        costPer1kInputTokens: 0,
-        costPer1kOutputTokens: 0,
-        maxTokens: 4096,
-      }],
-      handler,
-    })),
+```typescript
+interface LLMProviderConfig {
+  name: string;
+  type: 'openai' | 'anthropic' | 'google' | 'ollama' | 'custom';
+  enabled?: boolean;
+  priority?: number;  // Lower number = higher priority
+  handler: (req: LLMRequest) => Promise<LLMResponse>;
+  models: ModelConfig[];
+  rateLimit?: {
+    maxConcurrent?: number;
+    tokensPerSecond?: number;
   };
 }
 ```
 
-**3. Create and Use the Router**
-
-Finally, create the router instance and use it to execute requests.
+### Model Configuration
 
 ```typescript
-// examples/app.ts
-
-import { LLMRouter } from '../src';
-import { providerHandlers } from './handlers';
-import { makeRouterConfig } from './config';
-
-async function main() {
-  const router = await LLMRouter.create(providerHandlers, makeRouterConfig);
-
-  const res = await router.execute({
-    prompt: 'Tell me a joke about llamas',
-    model: 'gpt-3.5-turbo',
-  });
-
-  console.log(`Used provider: ${res.provider}`);
-  console.log(`Answer: ${res.text}`);
+interface ModelConfig {
+  name: string;
+  costPer1kInputTokens: number;
+  costPer1kOutputTokens: number;
+  maxTokens: number;
 }
+```
 
-main();
+### Resilience Configuration
+
+```typescript
+interface ResilienceConfig {
+  retry?: {
+    enabled: boolean;
+    attempts: number;
+    initialBackoffMs: number;
+    maxBackoffMs: number;
+    multiplier: number;
+  };
+  circuitBreaker?: {
+    enabled: boolean;
+    threshold: number;          // Failures before opening
+    samplingDurationMs: number; // Time window for failures
+    resetTimeoutMs: number;     // Time before trying half-open
+  };
+}
+```
+
+## Load Balancing Strategies
+
+### Cost Priority Round Robin
+Selects providers based on cost efficiency, factoring in both token costs and provider priority:
+
+```typescript
+// Lower cost providers are preferred
+// Priority acts as a multiplier (lower number = higher priority)
+finalScore = avgCost / priorityWeight
+```
+
+### Round Robin
+Distributes requests evenly across available providers based on least recently used:
+
+```typescript
+// Selects provider with oldest lastUsed timestamp
+```
+
+## Rate Limiting
+
+Uses token bucket algorithm with configurable refill rates:
+
+```typescript
+rateLimit: {
+  tokensPerSecond: 10,    // Bucket refill rate
+  maxConcurrent: 5        // Maximum concurrent requests
+}
+```
+
+- Providers without available tokens are skipped during selection
+- Rate-limited requests are tracked in metrics
+- Uses Bottleneck library for precise rate limiting
+
+## Circuit Breaker
+
+Per-provider circuit breaker with three states:
+
+- **Closed**: Normal operation
+- **Open**: Provider is failing, requests are blocked
+- **Half-Open**: Testing if provider has recovered
+
+```typescript
+circuitBreaker: {
+  enabled: true,
+  threshold: 5,          // Failures before opening
+  resetTimeoutMs: 30000  // Time before trying half-open
+}
+```
+
+## Metrics Tracking
+
+Each provider tracks comprehensive metrics:
+
+```typescript
+interface Metrics {
+  totalRequests: number;
+  successfulRequests: number;
+  failedRequests: number;
+  rateLimitedRequests: number;
+  circuitBreakerTrips: number;
+  lastRequestTime: number;
+  averageResponseTime: number;
+}
+```
+
+Access metrics via:
+```typescript
+const providers = router.providers;
+const metrics = providers.get('provider-name').metrics;
+```
+
+## Advanced Usage
+
+### Custom Error Handling
+
+```typescript
+const handler = async (req: LLMRequest): Promise<LLMResponse> => {
+  try {
+    // Your LLM API call
+    return await callLLMAPI(req);
+  } catch (error) {
+    // Custom error handling
+    if (error.status === 429) {
+      // Rate limit error - let circuit breaker handle it
+      throw error;
+    }
+    // Transform other errors as needed
+    throw new Error(`LLM API Error: ${error.message}`);
+  }
+};
+```
+
+### Provider Health Monitoring
+
+```typescript
+// Check provider health
+const provider = router.providers.get('my-provider');
+console.log(`Circuit breaker state: ${provider.circuitBreakerState}`);
+console.log(`Success rate: ${provider.metrics.successfulRequests / provider.metrics.totalRequests}`);
+console.log(`Avg response time: ${provider.metrics.averageResponseTime}ms`);
+```
+
+### Dynamic Configuration
+
+```typescript
+// Disable a failing provider
+const config = getCurrentConfig();
+config.providers.find(p => p.name === 'failing-provider').enabled = false;
+
+// Create new router with updated config
+const newRouter = await ResilientRouter.create(handlers, () => config);
+```
+
+## Examples
+
+### Multi-Provider Setup with Fallbacks
+
+```typescript
+const config = {
+  loadBalancingStrategy: 'cost_priority_round_robin',
+  providers: [
+    {
+      name: 'primary-cheap',
+      handler: cheapProviderHandler,
+      models: [{ name: 'gpt-3.5-turbo', costPer1kInputTokens: 0.001, costPer1kOutputTokens: 0.002 }],
+      priority: 1,
+      rateLimit: { tokensPerSecond: 50 }
+    },
+    {
+      name: 'secondary-expensive', 
+      handler: expensiveProviderHandler,
+      models: [{ name: 'gpt-4', costPer1kInputTokens: 0.03, costPer1kOutputTokens: 0.06 }],
+      priority: 2,
+      rateLimit: { tokensPerSecond: 10 }
+    },
+    {
+      name: 'backup-local',
+      handler: localProviderHandler,
+      models: [{ name: 'llama2', costPer1kInputTokens: 0, costPer1kOutputTokens: 0 }],
+      priority: 3,
+      rateLimit: { tokensPerSecond: 5 }
+    }
+  ]
+};
+```
+
+### Testing Circuit Breaker
+
+```typescript
+// Simulate failures to test circuit breaker
+const flakyHandler = async (req: LLMRequest): Promise<LLMResponse> => {
+  if (Math.random() < 0.7) { // 70% failure rate
+    throw new Error('Simulated failure');
+  }
+  return { text: 'Success!', provider: 'flaky', model: req.model };
+};
+```
+
+## Development
+
+```bash
+# Install dependencies
+npm install
+
+# Run tests
+npm test
+
+# Build
+npm run build
+
+# Run single test
+npm test -- --testNamePattern="test name"
 ```
 
 ## Contributing

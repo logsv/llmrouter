@@ -1,8 +1,8 @@
 
 import fs from 'fs/promises';
-import yaml from 'js-yaml';
+import * as yaml from 'js-yaml';
 import path from 'path';
-import { RouterConfig } from './types/config';
+import { RouterConfig } from '../types/config';
 import { z } from 'zod';
 
 const modelConfigSchema = z.object({
@@ -62,10 +62,10 @@ export async function loadConfig(configPath?: string): Promise<RouterConfig> {
     const fileContent = await fs.readFile(fullPath, 'utf-8');
     const config = yaml.load(fileContent);
     return routerConfigSchema.parse(config);
-  } catch (error) {
+  } catch (error: any) {
     if (error.code === 'ENOENT') {
       throw new Error(`Configuration file not found at ${fullPath}`);
     }
-    throw new Error(`Error loading or parsing configuration file: ${error.message}`);
+    throw new Error(`Error loading or parsing configuration file: ${error.message || 'Unknown error'}`);
   }
 }

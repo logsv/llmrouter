@@ -1,5 +1,23 @@
 
-import { ProviderWrapper } from './router.js';
+type ProviderWrapper = {
+  provider: any;
+  config: any;
+  limiter: any;
+  lastUsed: number;
+  failureCount: number;
+  successCount: number;
+  circuitBreakerState: 'closed' | 'open' | 'half-open';
+  circuitBreakerOpenedAt?: number;
+  metrics: {
+    totalRequests: number;
+    successfulRequests: number;
+    failedRequests: number;
+    rateLimitedRequests: number;
+    circuitBreakerTrips: number;
+    lastRequestTime: number;
+    averageResponseTime: number;
+  };
+};
 
 export function selectRoundRobin(providers: [string, ProviderWrapper][]): string {
   return providers.reduce((a, b) => 
@@ -8,33 +26,24 @@ export function selectRoundRobin(providers: [string, ProviderWrapper][]): string
 }
 
 export function selectByCostPriority(providers: [string, ProviderWrapper][]): string {
-  const weightedProviders = providers.map(([name, wrapper]) => {
-    const model = wrapper.config.models[0];
-    const costWeight = 1 / (model?.costPer1kInputTokens || 0.01);
-    const priorityWeight = wrapper.config.priority || 1;
-    const weight = costWeight * priorityWeight;
-    
-    const timeSinceLastUse = Date.now() - (wrapper.lastUsed || 0);
-    const timeWeight = Math.min(timeSinceLastUse / 60000, 10);
-    
-    return {
-      name,
-      weight: weight * timeWeight,
-      lastUsed: wrapper.lastUsed || 0,
-    };
-  });
+  // Sort providers by cost (cheapest first) and return the cheapest one
+  const sortedProviders = providers
+    .map(([name, wrapper]) => {
+      const model = wrapper.config.models[0];
+      if (!model) {
+        return { name, cost: Infinity };
+      }
+      
+      // Calculate average cost per 1k tokens (assuming 50/50 input/output ratio)
+      const avgCost = (model.costPer1kInputTokens + model.costPer1kOutputTokens) / 2;
+      // Factor in priority (lower priority number = higher priority)
+      const priorityWeight = 1 / (wrapper.config.priority || 1);
+      const finalScore = avgCost / priorityWeight;
+      
+      return { name, cost: finalScore };
+    })
+    .sort((a, b) => a.cost - b.cost);
   
-  const totalWeight = weightedProviders.reduce((sum, p) => sum + p.weight, 0);
-  let random = Math.random() * totalWeight;
-  
-  for (const provider of weightedProviders) {
-    if (random < provider.weight) {
-      return provider.name;
-    }
-    random -= provider.weight;
-  }
-  
-  return weightedProviders.reduce((a, b) => 
-    a.lastUsed < b.lastUsed ? a : b
-  ).name;
+  // Return the cheapest provider
+  return sortedProviders[0]?.name || providers[0][0];
 }

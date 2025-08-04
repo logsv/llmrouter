@@ -1,20 +1,10 @@
-import sinon from 'sinon';
-import { LLMRouter, type LLMRequest, type LLMResponse, type ProviderHandlers } from '../../src/index';
-import type { RouterConfig } from '../../src/types/config';
+import { ResilientRouter } from '../../src/router-with-resilience';
+import type { LLMRequest, LLMResponse, RouterConfig } from '../../src/index';
 
-describe('LLMRouter', () => {
-  let sandbox: sinon.SinonSandbox;
-
-  beforeEach(() => {
-    sandbox = sinon.createSandbox();
-  });
-
-  afterEach(() => {
-    sandbox.restore();
-  });
+describe('ResilientRouter', () => {
 
   describe('create', () => {
-    it('should create LLMRouter instance with valid configuration', async () => {
+    it('should create ResilientRouter instance with valid configuration', async () => {
       const mockConfig: RouterConfig = {
         providers: [
           {
@@ -24,14 +14,14 @@ describe('LLMRouter', () => {
           },
         ],
       };
-      const router = await LLMRouter.create({}, () => mockConfig);
-      expect(router).toBeInstanceOf(LLMRouter);
+      const router = await ResilientRouter.create({}, () => mockConfig);
+      expect(router).toBeInstanceOf(ResilientRouter);
     });
   });
 
   describe('execute', () => {
     it('should use custom handler when provided', async () => {
-      const handler = sinon.stub().resolves({ text: 'custom response', provider: 'custom-provider', model: 'test-model' });
+      const handler = jest.fn().mockResolvedValue({ text: 'custom response', provider: 'custom-provider', model: 'test-model' });
       const mockConfig: RouterConfig = {
         defaultModel: 'test-model',
         providers: [
@@ -43,11 +33,45 @@ describe('LLMRouter', () => {
           },
         ],
       };
-      const router = await LLMRouter.create({}, () => mockConfig);
+      const router = await ResilientRouter.create({}, () => mockConfig);
       const request: LLMRequest = { prompt: 'test' };
       const response = await router.execute(request);
       expect(response.text).toBe('custom response');
-      expect(handler.calledOnce).toBe(true);
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('should retry on failure', async () => {
+      const handler = jest.fn()
+        .mockRejectedValueOnce(new Error('error'))
+        .mockResolvedValue({ text: 'custom response', provider: 'custom-provider', model: 'test-model' });
+
+      const mockConfig: RouterConfig = {
+        defaultModel: 'test-model',
+        providers: [
+          {
+            name: 'custom-provider',
+            type: 'custom',
+            models: [{ name: 'test-model', costPer1kInputTokens: 0, costPer1kOutputTokens: 0, maxTokens: 4096 }],
+            handler: handler,
+          },
+        ],
+        resilience: {
+          retry: {
+            enabled: true,
+            attempts: 2,
+            initialBackoffMs: 1,
+            maxBackoffMs: 1,
+            multiplier: 1,
+          },
+        },
+      };
+
+      const router = await ResilientRouter.create({}, () => mockConfig);
+      const request: LLMRequest = { prompt: 'test' };
+      const response = await router.execute(request);
+
+      expect(response.text).toBe('custom response');
+      expect(handler).toHaveBeenCalledTimes(2);
     });
   });
 });

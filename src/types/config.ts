@@ -1,5 +1,8 @@
 
-import type { LLMRequest, LLMResponse } from '../core/router';
+import type { LLMRequest, LLMResponse, ProviderHandlers } from '../core/router';
+
+// Re-export types for convenience
+export type { LLMRequest, LLMResponse, ProviderHandlers };
 
 export interface ModelConfig {
   name: string;
