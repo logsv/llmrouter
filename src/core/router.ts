@@ -99,10 +99,15 @@ export class LLMRouter {
       }
 
       // Create rate limiter
+      const tokensPerSecond = providerConfig.rateLimit?.tokensPerSecond || 1000;
+      const minTime = Math.max(1, 1000 / tokensPerSecond); // Minimum 1ms between requests
+      
       const limiter = new Bottleneck({
-        maxConcurrent: providerConfig.rateLimit?.maxConcurrent || 10,
-        minTime: providerConfig.rateLimit?.minTimeMs ? 
-          1000 / (providerConfig.rateLimit.tokensPerSecond || 1) : 100,
+        maxConcurrent: providerConfig.rateLimit?.maxConcurrent || 5,
+        minTime: minTime,
+        reservoir: tokensPerSecond, // Token bucket size
+        reservoirRefreshAmount: tokensPerSecond,
+        reservoirRefreshInterval: 1000, // Refill every second
       });
 
       
@@ -465,6 +470,89 @@ export class LLMRouter {
     return response;
   }
 
+  /**
+   * Get status and metrics for a specific provider
+   */
+  public getProviderStatus(providerName: string) {
+    const provider = this.providers.get(providerName);
+    if (!provider) {
+      return null;
+    }
+
+    return {
+      name: providerName,
+      enabled: provider.config.enabled ?? true,
+      circuitBreakerState: provider.circuitBreakerState,
+      metrics: { ...provider.metrics },
+      lastUsed: provider.lastUsed
+    };
+  }
+
+  /**
+   * Get status and metrics for all providers
+   */
+  public getProviderStatuses() {
+    const statuses: Record<string, any> = {};
+    
+    for (const [name, provider] of this.providers.entries()) {
+      statuses[name] = {
+        name,
+        enabled: provider.config.enabled ?? true,
+        circuitBreakerState: provider.circuitBreakerState,
+        metrics: { ...provider.metrics },
+        lastUsed: provider.lastUsed
+      };
+    }
+
+    return statuses;
+  }
+
+  /**
+   * Get available models for all providers
+   */
+  public getAvailableModels(): string[] {
+    const models = new Set<string>();
+    
+    for (const [, provider] of this.providers.entries()) {
+      if (provider.config.enabled !== false && provider.config.models) {
+        provider.config.models.forEach(model => models.add(model.name));
+      }
+    }
+
+    return Array.from(models);
+  }
+
+  /**
+   * Get list of provider names
+   */
+  public getAvailableProviders(): string[] {
+    return Array.from(this.providers.keys()).filter(name => {
+      const provider = this.providers.get(name);
+      return provider && provider.config.enabled !== false;
+    });
+  }
+
+  /**
+   * Get the current configuration
+   */
+  public getConfig(): RouterConfig {
+    return { ...this.config };
+  }
+
+  /**
+   * Health check - returns overall service health
+   */
+  public async healthCheck() {
+    const statuses = this.getProviderStatuses();
+    const enabledProviders = Object.values(statuses).filter(p => p.enabled);
+    const healthyProviders = enabledProviders.filter(p => p.circuitBreakerState === 'closed');
+    
+    return {
+      status: healthyProviders.length > 0 ? 'healthy' : 'unhealthy',
+      message: `Service operational with ${healthyProviders.length} healthy providers`,
+      providers: statuses
+    };
+  }
   
 }
 

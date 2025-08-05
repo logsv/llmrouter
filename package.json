@@ -1,6 +1,6 @@
 {
   "name": "llm-router",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Production-ready LLM router with load balancing, resilience patterns, and multi-provider support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
